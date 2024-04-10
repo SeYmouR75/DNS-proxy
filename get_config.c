@@ -2,24 +2,24 @@
 
 char* get_dns_addr(char* filename){
     FILE* conf_file;
-    char* variable;
+    char* variable = NULL;
     size_t variable_size = 0;
     char variable_name[18], variable_value[16];
-    char* result;
+    char* result = NULL;
     
     conf_file = fopen(filename, "r");
     
     if(errno){
         printf("%s\n", strerror(errno));
     }else{
-        do{
-            if(getline(&variable, &variable_size, conf_file) != -1){
-                if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
+        while(getline(&variable, &variable_size, conf_file) != -1){
+            if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
+                if(strncmp(variable_name, "UPSTREAM_DNS_ADDR", 17) == 0){
                     result = (char*)malloc(strlen(variable_value) + 1);
                     strcpy(result, variable_value);
                 }
             }
-        }while(strncmp(variable_name, "UPSTREAM_DNS_ADDR", 17) != 0);
+        }
     }
 
     if(variable) free(variable);
@@ -31,7 +31,7 @@ char* get_dns_addr(char* filename){
 
 int get_response_type(char* filename){
     FILE* conf_file;
-    char* variable;
+    char* variable = NULL;
     size_t variable_size = 0;
     char variable_name[16], variable_value[8];
     int result = 0;
@@ -41,14 +41,13 @@ int get_response_type(char* filename){
     if(errno){
         printf("%s\n", strerror(errno));
     }else{
-        do{
-            if(getline(&variable, &variable_size, conf_file) != -1){
-
-                if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
+        while(getline(&variable, &variable_size, conf_file) != -1){
+            if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
+                if(strncmp(variable_name, "RESPONSE_BANNED", 15) == 0){
                     result = atoi(variable_value);
                 }
             }
-        }while(strncmp(variable_name, "RESPONSE_BANNED", 15) != 0);
+        }
     }
 
     if(variable) free(variable);
@@ -60,34 +59,31 @@ int get_response_type(char* filename){
 
 char* get_blacklist(char* filename){
     FILE* conf_file;
-    char* variable;
+    char* variable = NULL;
     size_t variable_size = 0;
     char variable_name[18];
-    char variable_value[20];
-    char* result;
+    char* variable_value = NULL;
+    char* result = NULL;
     
     conf_file = fopen(filename, "r");
     
     if(errno){
         printf("%s\n", strerror(errno));
     }else{
-        do{
-            if(strncmp(variable_name, "BLACKLIST", 9) != 0){
-                // variable_name = malloc(strlen(variable));
-                // variable_value = malloc(strlen(variable));
-                if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
+        while(getline(&variable, &variable_size, conf_file) != -1){
+            variable_value = malloc(strlen(variable));
+            if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
+                if(strncmp(variable_name, "BLACKLIST", 9) == 0){
                     result = (char*)malloc(strlen(variable_value) + 1);
                     strcpy(result, variable_value);
                 }
             }
-        }while(getline(&variable, &variable_size, conf_file) != -1);
+
+            if(variable_value) free(variable_value);
+        }
     }
 
     if(variable) free(variable);
-
-    // if(variable_name) free(variable_name);
-
-    // if(variable_value) free(variable_value);
 
     if(conf_file) fclose(conf_file);
 
