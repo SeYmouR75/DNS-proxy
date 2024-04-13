@@ -9,9 +9,7 @@ char* get_dns_addr(char* filename){
     
     conf_file = fopen(filename, "r");
     
-    if(errno){
-        printf("%s\n", strerror(errno));
-    }else{
+    if(!errno){
         while(getline(&variable, &variable_size, conf_file) != -1){
             if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
                 if(strncmp(variable_name, "UPSTREAM_DNS_ADDR", 17) == 0){
@@ -29,22 +27,21 @@ char* get_dns_addr(char* filename){
     return result;
 }
 
-int get_response_type(char* filename){
+char* get_response_type(char* filename){
     FILE* conf_file;
     char* variable = NULL;
     size_t variable_size = 0;
-    char variable_name[16], variable_value[8];
-    int result = 0;
+    char variable_name[16], variable_value[16];
+    char* result = NULL;
     
     conf_file = fopen(filename, "r");
     
-    if(errno){
-        printf("%s\n", strerror(errno));
-    }else{
+    if(!errno){
         while(getline(&variable, &variable_size, conf_file) != -1){
             if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
-                if(strncmp(variable_name, "RESPONSE_BANNED", 15) == 0){
-                    result = atoi(variable_value);
+                if(strncmp(variable_name, "RESPONSE_BANNED", 15) == 0){ 
+                    result = (char*)malloc(strlen(variable_value) + 1);
+                    strcpy(result, variable_value);
                 }
             }
         }
@@ -67,9 +64,7 @@ char* get_blacklist(char* filename){
     
     conf_file = fopen(filename, "r");
     
-    if(errno){
-        printf("%s\n", strerror(errno));
-    }else{
+    if(!errno){
         while(getline(&variable, &variable_size, conf_file) != -1){
             variable_value = malloc(strlen(variable));
             if(sscanf(variable, "%[^=]=%[^\n]", variable_name, variable_value) == 2){
@@ -88,4 +83,12 @@ char* get_blacklist(char* filename){
     if(conf_file) fclose(conf_file);
 
     return result;
+}
+
+void config_free(char* upstream_dns_addr, char* response_blacklist, char* blacklist){
+    if(upstream_dns_addr) free(upstream_dns_addr);
+
+    if(response_blacklist) free(response_blacklist);
+
+    if(blacklist) free(blacklist);
 }

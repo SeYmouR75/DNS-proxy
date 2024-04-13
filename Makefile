@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -Werror -Wextra
+CFLAGS=-Wall -Wextra
 
 BUILD_DIR=build
 
@@ -14,7 +14,7 @@ HDR=$(wildcard *.h)
 TARGET=proxy.exe
 
 
-all:$(TARGET)
+all: clean $(TARGET)
 
 $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) $(HDR) -o $(BUILD_DIR)/$@
@@ -24,6 +24,7 @@ $(BUILD_DIR)/%.o: %.c
 
 test: clean $(TARGET)
 	./$(BUILD_DIR)/$(TARGET)
+#	valgrind --tool=memcheck --leak-check=yes -s ./$(BUILD_DIR)/$(TARGET)
 
 clean_obj:
 	rm -rf $(BUILD_DIR)/*.o
