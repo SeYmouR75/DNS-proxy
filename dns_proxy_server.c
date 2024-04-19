@@ -1,92 +1,78 @@
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include "dns_proxy_server.h"
 
-#include "get_config.h"
-
-#define CONFIG_FILE "dns_settings.conf"
-#define DNS_PORT 49155
-#define MAX_BUFFER 1024
+char *UPSTREAM_DNS_ADDR;
+char *RESPONSE_BLACKLIST;
+char *BLACKLIST;
 
 int main(){
     int sock_fd;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t addr_size;
-    char domain_name[MAX_BUFFER];
-    unsigned banned = 0;
-    char* upstream_dns_addr = get_dns_addr(CONFIG_FILE);
-    char* response_blacklist = get_response_type(CONFIG_FILE);
-    char* blacklist = get_blacklist(CONFIG_FILE);
 
-    if(errno != 0){
-        printf("%s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }else if(!upstream_dns_addr || !response_blacklist || !blacklist){
-        printf("Some or all of the settings are incorrect, please check dns_settings.conf\n");
-        config_free(upstream_dns_addr, response_blacklist, blacklist);
-        exit(EXIT_FAILURE);
-    }else{
-        printf("Configuration has been set successfully\n");
-    }
+    struct sockaddr_in bind_addr, client_addr, dns_addr;
+    socklen_t client_addr_len = 0, response_len = 0;
 
-    sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    struct dns_header_t *dns_h;
+    struct dns_question_t *dns_q;
 
-    if(sock_fd == -1){
-        printf("socket creation failed\n");
-        config_free(upstream_dns_addr, response_blacklist, blacklist);
-        exit(EXIT_FAILURE);
-    }
+    unsigned char buff[MAX_BUFFER], domain[MIN_BUFFER] = "google.com", *network_domain;
+    //unsigned banned = 0;
 
-    memset(&server_addr, 0, sizeof(server_addr));   
+    srand(time(NULL));
+
+    get_config(CONFIG_FILE);
+
+    sock_fd = create_socket();
     
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(DNS_PORT);
+    memset(&client_addr, 0, sizeof(client_addr));
+    memset(&dns_addr, 0, sizeof(dns_addr));
+    memset(&bind_addr, 0, sizeof(bind_addr));   
 
-    if (bind(sock_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1){
-        printf("socket binding failed\n");
-        config_free(upstream_dns_addr, response_blacklist, blacklist);
-        exit(EXIT_FAILURE);
-    }
+    dns_addr.sin_family = AF_INET;
+    dns_addr.sin_port = htons(DNS_PORT);
+    inet_pton(AF_INET, UPSTREAM_DNS_ADDR, &(dns_addr.sin_addr));
+    
+    bind_addr.sin_family = AF_INET;
+    bind_addr.sin_port = htons(CLIENT_PORT);
+    bind_addr.sin_addr.s_addr = INADDR_ANY;
 
-    addr_size = sizeof(client_addr);
+    bind_socket(sock_fd, bind_addr);
 
     while(1){
-        memset(&domain_name, 0, MAX_BUFFER);
+        memset(&domain, 0, MIN_BUFFER);
 
-        recvfrom(sock_fd, domain_name, MAX_BUFFER, 0, (struct sockaddr *)&client_addr, &addr_size);
+        ssize_t catch = recvfrom(sock_fd, domain, MIN_BUFFER, 0, (struct sockaddr *)&client_addr, &client_addr_len);
 
         if(errno != 0){
             perror("recvfrom failed");
-            printf("%s\n", strerror(errno));
-            break;
+            config_free();
+            close(sock_fd); 
+            exit(EXIT_FAILURE);
         }
 
-        if(domain_name){
+        if(catch > 0)
             break;
-        }
     }
 
-    char* token = strtok(blacklist, ",");
+    dns_h = (struct dns_header_t *)&buff;
+    fill_dns_header(dns_h);
 
-    while(token != NULL){
-        if(strcmp(domain_name, token) == 0){
-            banned = 1;
-        }
-        token = strtok(NULL, ",");
-    }
+    network_domain = (unsigned char *)&buff[sizeof(struct dns_header_t)];
+    to_dns_format_domain(network_domain, domain);
+    
+    dns_q = (struct dns_question_t*)&buff[sizeof(struct dns_header_t) + strlen((const char *)network_domain) + 1];
+    dns_q->qtype = htons(1); //1 = A - IPv4 query
+    dns_q->qclass = htons(1); //1 = IN - internet 
+    size_t buffer_pos = sizeof(struct dns_header_t) + (strlen((const char *)network_domain) + 1) + sizeof(struct dns_question_t);
 
-    printf("%u\n", banned);
+    printf("Sending query.. ");
+    send_message(sock_fd, buff, buffer_pos, dns_addr);
 
-    // get_target_domain();
-    // check_domain();
-    // connect_to_upstream_dns(upstream_dns_addr);
+    printf("Recieving response.. ");
+    recieve_response(sock_fd, buff, &dns_addr, &response_len);
+
+    printf("Sending response to client.. ");
+    send_message(sock_fd, buff, buffer_pos, dns_addr);
 
     if(sock_fd) close(sock_fd);
 
-    config_free(upstream_dns_addr, response_blacklist, blacklist);
+    config_free();
 }
